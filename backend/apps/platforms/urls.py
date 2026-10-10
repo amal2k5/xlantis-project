@@ -1,9 +1,10 @@
 from django.urls import path
 
-from apps.platforms.views import PlatformsRootView
+from apps.platforms.views import PlatformListView
 
 app_name = "platforms"
 
 urlpatterns = [
-    path("", PlatformsRootView.as_view(), name="root"),
+    path("", PlatformListView.as_view(), name="platform-list"),
+    path("", PlatformListView.as_view(), name="root"),
 ]
