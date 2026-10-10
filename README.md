@@ -1,112 +1,91 @@
-# Xlantis RP Streamer & Content Directory - Backend
+# Xlantis Project
 
-Initial Django backend foundation for the Xlantis RP Streamer & Content Directory project.
-
-## Tech Stack
-- **Python**: 3.12
-- **Framework**: Django 5.2 & Django REST Framework (DRF)
-- **Database**: PostgreSQL with `psycopg` (v3)
-- **Configuration**: `django-environ`
-- **Linter & Formatter**: Ruff
-- **Testing**: pytest & pytest-django
+Monorepo for the **Xlantis RP Streamer & Content Directory** platform — connecting GTA RP roleplayers, factions, stream feeds, and viewers.
 
 ---
 
-## Project Structure
+## Monorepo Architecture
 
 ```
 Xlantis Project/
-├── .env.example              # Environment variables template
-├── .gitignore                # Git ignore rules
-├── pyproject.toml            # Ruff & pytest configuration
-├── requirements.txt          # Python dependencies
-├── manage.py                 # Django management script
-├── README.md                 # Setup and usage guide
-├── config/                   # Django core configuration
-│   ├── __init__.py
-│   ├── asgi.py               # ASGI server entrypoint
-│   ├── settings.py           # Project settings
-│   ├── urls.py               # Main URL dispatcher & health check
-│   └── wsgi.py               # WSGI server entrypoint
-└── apps/                     # Application modules
-    ├── __init__.py
-    ├── directory/            # Streamer & character directory module
-    │   ├── admin.py
-    │   ├── apps.py
-    │   ├── models.py         # Models to be added in Phase 2
-    │   ├── tests.py
-    │   ├── urls.py
-    │   └── views.py
-    └── platforms/            # Streaming platforms integration module
-        ├── admin.py
-        ├── apps.py
-        ├── models.py         # Models to be added in Phase 2
-        ├── tests.py
-        ├── urls.py
-        └── views.py
+├── backend/                  # Django 5.2 & Django REST Framework API
+│   ├── apps/                 # Domain modules (directory, platforms)
+│   ├── config/               # Project configuration, settings, URL routing
+│   ├── tests/                # Project-level and integration tests
+│   ├── manage.py             # Django CLI entrypoint
+│   ├── pyproject.toml        # Ruff & pytest configuration
+│   ├── requirements.txt      # Python dependencies
+│   ├── .env.example          # Backend environment template
+│   └── README.md             # Backend setup and developer guide
+│
+├── frontend/                 # React 19 + Vite 8 + Tailwind CSS v4 SPA
+│   ├── src/                  # Components, pages, layout, services
+│   ├── public/               # Static assets & icons
+│   ├── package.json          # Node dependencies & scripts
+│   ├── vite.config.js        # Vite configuration
+│   └── README.md             # Frontend guide
+│
+├── services/                 # Microservices and specialized integrations
+│   └── integrations/         # Reserved for future FastAPI background service
+│       └── README.md
+│
+├── docs/                     # Project architecture and technical documentation
+│   └── .gitkeep
+│
+├── .gitignore                # Repository-wide ignore rules
+├── .venv/                    # Shared Python virtual environment (root level)
+└── README.md                 # This overview file
 ```
 
 ---
 
-## Getting Started
+## Applications & Subprojects
 
-### 1. Prerequisites
-- Python 3.12+
-- PostgreSQL 14+ running locally or remotely
+### 1. Backend (`backend/`)
+- **Technology**: Python 3.12, Django 5.2, Django REST Framework, PostgreSQL
+- **Role**: Core data models, directory listings, faction management, platform account tracking, and REST endpoints.
+- **Documentation**: See [backend/README.md](backend/README.md) for detailed setup and API documentation.
+- **Quick start**:
+  ```powershell
+  # Activate virtual environment
+  .\.venv\Scripts\Activate.ps1
 
-### 2. Create and Activate Virtual Environment
+  # Navigate to backend and run
+  cd backend
+  python manage.py check
+  python manage.py runserver
+  ```
 
-**Windows (PowerShell):**
+### 2. Frontend (`frontend/`)
+- **Technology**: React 19, Vite 8, Tailwind CSS v4, React Router v7, Axios
+- **Role**: Responsive user interface featuring directory search, faction previews, creator spotlight, and individual persona profiles.
+- **Quick start**:
+  ```powershell
+  cd frontend
+  npm install
+  npm run dev
+  ```
+
+### 3. Services (`services/`)
+- **Integrations (`services/integrations/`)**: Reserved directory for the upcoming FastAPI service handling external streaming platform API webhooks, sync tasks, and live status integrations.
+
+---
+
+## Development Workflow
+
+### Python Environment
+The Python virtual environment (`.venv`) is maintained at the repository root to allow shared tooling and linting across services.
+To run tests across the backend:
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-**macOS / Linux:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-Copy `.env.example` to `.env`:
-```powershell
-Copy-Item .env.example .env
-```
-Update the `.env` file with your PostgreSQL credentials:
-```env
-DATABASE_URL=postgres://<username>:<password>@localhost:5432/<dbname>
-```
-
-### 5. Verify Django Setup
-Run the Django system check:
-```powershell
-python manage.py check
-```
-
-### 6. Run Tests
-```powershell
+cd backend
 pytest
-```
-
-### 7. Run Code Quality Checks
-```powershell
 ruff check .
-ruff format --check .
 ```
 
-### 8. Run Development Server
+### Frontend Environment
+The frontend uses standard npm scripts:
 ```powershell
-python manage.py runserver
+cd frontend
+npm run lint
+npm run build
 ```
-
-Endpoints available:
-- Health Check: `http://127.0.0.1:8000/api/health/`
-- Directory API: `http://127.0.0.1:8000/api/v1/directory/`
-- Platforms API: `http://127.0.0.1:8000/api/v1/platforms/`
-- Admin: `http://127.0.0.1:8000/admin/`

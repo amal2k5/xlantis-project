@@ -18,10 +18,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "apps"]
+known-first-party = ["config", "apps", "tests"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 addopts = "--ds=config.settings"
-testpaths = ["apps"]
+testpaths = ["apps", "tests"]
