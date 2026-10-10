@@ -1,0 +1,1 @@
+"""Platforms app package."""
