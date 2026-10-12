@@ -149,3 +149,34 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
+
+
+# Kick API configuration
+KICK_CLIENT_ID = env("KICK_CLIENT_ID", default="")
+KICK_CLIENT_SECRET = env("KICK_CLIENT_SECRET", default="")
+KICK_TOKEN_URL = "https://id.kick.com/oauth/token"
+KICK_API_BASE_URL = "https://api.kick.com/public/v1"
+
+
+# Celery Configuration
+CELERY_BROKER_URL = env(
+    "REDIS_URL",
+    default="redis://127.0.0.1:6379/0",
+)
+CELERY_RESULT_BACKEND = env(
+    "REDIS_URL",
+    default="redis://127.0.0.1:6379/0",
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery Beat Schedule
+CELERY_BEAT_SCHEDULE = {
+    "sync-kick-live-status-every-minute": {
+        "task": "apps.platforms.tasks.sync_all_kick_accounts",
+        "schedule": 60.0,
+    },
+}

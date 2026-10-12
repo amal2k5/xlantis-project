@@ -255,3 +255,30 @@ export async function getPlatforms(options = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Live Status Services
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the latest livestream statuses for platform accounts.
+ *
+ * @param {Object}  [options]            - Query parameter options.
+ * @param {number}  [options.page]       - Page number.
+ * @param {number}  [options.page_size]  - Items per page.
+ * @returns {Promise<Array>} Array of platform live status objects.
+ */
+export async function getLiveStatuses(options = {}) {
+  try {
+    const params = {};
+    if (options.page) params.page = options.page;
+    if (options.page_size) params.page_size = options.page_size;
+
+    const response = await apiClient.get("/platforms/live-status/", { params });
+    return unwrapResults(response.data);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    handleApiError(error);
+  }
+}
+
+

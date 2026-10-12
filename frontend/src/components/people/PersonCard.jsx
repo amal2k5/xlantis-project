@@ -1,12 +1,41 @@
 import { Link } from "react-router-dom";
 
-export default function PersonCard({ person }) {
+function formatViewerCount(count) {
+  if (typeof count !== "number" || isNaN(count) || count < 0) return null;
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  }
+  return count.toLocaleString();
+}
+
+function getPlatformDisplayName(platform) {
+  if (!platform) return "Live";
+  const map = {
+    kick: "Kick",
+    youtube: "YouTube",
+    twitch: "Twitch",
+    x: "X",
+    facebook: "Facebook",
+    discord: "Discord",
+    tiktok: "TikTok",
+  };
+  return map[platform.toLowerCase()] || platform.charAt(0).toUpperCase() + platform.slice(1);
+}
+
+export default function PersonCard({ person, liveStatus }) {
   if (!person) return null;
 
   // memberships and platform_accounts are only present in detail responses.
   // In list views these will be undefined — we guard access with optional chaining.
   const currentMembership = person.memberships?.find((m) => !m.ended_on);
   const currentFaction = currentMembership?.faction;
+
+  const isLive = Boolean(liveStatus && liveStatus.is_live);
+  const platformName = isLive ? getPlatformDisplayName(liveStatus.platform) : null;
+  const formattedViewers = isLive ? formatViewerCount(liveStatus.viewer_count) : null;
 
   return (
     <article className="group relative flex flex-col justify-between rounded-xl border border-neutral-800/90 bg-neutral-900/60 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:bg-neutral-900/90 hover:shadow-lg hover:shadow-emerald-950/20">
@@ -20,8 +49,20 @@ export default function PersonCard({ person }) {
               width={56}
               height={56}
               loading="lazy"
-              className="h-14 w-14 rounded-full border-2 border-neutral-800 object-cover transition-colors group-hover:border-emerald-500/60"
+              className={`h-14 w-14 rounded-full border-2 object-cover transition-colors ${
+                isLive
+                  ? "border-red-500 shadow-md shadow-red-500/20 ring-2 ring-red-500/30"
+                  : "border-neutral-800 group-hover:border-emerald-500/60"
+              }`}
             />
+            {isLive && (
+              <span
+                title={`Live on ${platformName}`}
+                className="absolute -top-1 -right-1 flex h-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-black uppercase text-white shadow-sm ring-2 ring-neutral-900"
+              >
+                LIVE
+              </span>
+            )}
             {person.is_featured && (
               <span
                 title="Featured Creator"
@@ -74,6 +115,36 @@ export default function PersonCard({ person }) {
             </div>
           )}
 
+          {/* Live Status Banner */}
+          {isLive && (
+            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-2.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shrink-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" aria-hidden="true" />
+                    LIVE
+                  </span>
+                  <span className="text-xs font-semibold text-red-400 truncate">
+                    {platformName}
+                  </span>
+                </div>
+                {formattedViewers && (
+                  <span className="text-[11px] font-medium text-neutral-300 shrink-0">
+                    {formattedViewers} viewers
+                  </span>
+                )}
+              </div>
+              {liveStatus.stream_title && (
+                <p
+                  className="mt-1.5 line-clamp-1 text-xs text-neutral-200"
+                  title={liveStatus.stream_title}
+                >
+                  {liveStatus.stream_title}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Bio Preview */}
           {person.bio && (
             <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-neutral-400">
@@ -87,18 +158,31 @@ export default function PersonCard({ person }) {
       <div className="mt-5 flex items-center justify-between border-t border-neutral-800/80 pt-3">
         <div className="flex items-center gap-2">
           {/* platform_accounts only available in detail responses — safe to omit in list */}
-          {person.platform_accounts?.slice(0, 3).map((acc) => (
-            <a
-              key={acc.id}
-              href={acc.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${acc.platform?.name} profile of ${person.display_name}`}
-              className="flex h-7 items-center rounded bg-neutral-800/90 px-2 text-[11px] font-medium text-neutral-300 transition-colors hover:bg-emerald-500/20 hover:text-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-            >
-              {acc.platform?.name}
-            </a>
-          ))}
+          {person.platform_accounts?.slice(0, 3).map((acc) => {
+            const isAccountLive =
+              isLive &&
+              (acc.handle?.toLowerCase() === liveStatus.handle?.toLowerCase() ||
+                acc.platform?.slug?.toLowerCase() === liveStatus.platform?.toLowerCase());
+            return (
+              <a
+                key={acc.id}
+                href={acc.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${acc.platform?.name} profile of ${person.display_name}${isAccountLive ? " (Live now)" : ""}`}
+                className={`flex h-7 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors focus:outline-none focus:ring-1 ${
+                  isAccountLive
+                    ? "border border-red-500/30 bg-red-500/20 text-red-300 hover:bg-red-500/30 focus:ring-red-400"
+                    : "bg-neutral-800/90 text-neutral-300 hover:bg-emerald-500/20 hover:text-emerald-300 focus:ring-emerald-400"
+                }`}
+              >
+                {isAccountLive && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                )}
+                {acc.platform?.name}
+              </a>
+            );
+          })}
         </div>
 
         <Link
@@ -114,3 +198,4 @@ export default function PersonCard({ person }) {
     </article>
   );
 }
+

@@ -1,11 +1,48 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getPersonBySlug } from "../services/api";
+import { getPersonBySlug, getLiveStatuses } from "../services/api";
 import Loading from "../components/common/Loading";
+
+function formatViewerCount(count) {
+  if (typeof count !== "number" || isNaN(count) || count < 0) return null;
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  }
+  return count.toLocaleString();
+}
+
+function getPlatformDisplayName(platform) {
+  if (!platform) return "Live";
+  const map = {
+    kick: "Kick",
+    youtube: "YouTube",
+    twitch: "Twitch",
+    x: "X",
+    facebook: "Facebook",
+    discord: "Discord",
+    tiktok: "TikTok",
+  };
+  return map[platform.toLowerCase()] || platform.charAt(0).toUpperCase() + platform.slice(1);
+}
+
+function formatStreamStartTime(dateString) {
+  if (!dateString) return null;
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return null;
+  }
+}
 
 export default function PersonProfilePage() {
   const { slug } = useParams();
   const [personState, setPersonState] = useState({ slug: null, data: null, error: null });
+  const [liveStatus, setLiveStatus] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -28,6 +65,36 @@ export default function PersonProfilePage() {
 
     return () => {
       isMounted = false;
+    };
+  }, [slug]);
+
+  // Poll live status for this profile periodically (~60 seconds)
+  useEffect(() => {
+    let isMounted = true;
+    let isFetching = false;
+
+    const fetchLive = async () => {
+      if (isFetching || !slug) return;
+      isFetching = true;
+      try {
+        const statuses = await getLiveStatuses();
+        if (isMounted && Array.isArray(statuses)) {
+          const match = statuses.find((s) => s?.person_slug === slug) || null;
+          setLiveStatus(match);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch live status for profile:", err?.message || err);
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    fetchLive();
+    const intervalId = setInterval(fetchLive, 60000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
     };
   }, [slug]);
 
@@ -76,6 +143,11 @@ export default function PersonProfilePage() {
   const currentMembership = person.memberships?.find((m) => !m.ended_on);
   const faction = currentMembership?.faction;
 
+  const isLive = Boolean(liveStatus && liveStatus.is_live);
+  const platformName = isLive ? getPlatformDisplayName(liveStatus.platform) : null;
+  const formattedViewers = isLive ? formatViewerCount(liveStatus.viewer_count) : null;
+  const formattedStartTime = isLive ? formatStreamStartTime(liveStatus.stream_started_at) : null;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       {/* Breadcrumb Navigation */}
@@ -106,8 +178,20 @@ export default function PersonProfilePage() {
                 width={96}
                 height={96}
                 loading="eager"
-                className="h-24 w-24 rounded-2xl border-2 border-emerald-500/40 object-cover shadow-lg shadow-black/40"
+                className={`h-24 w-24 rounded-2xl border-2 object-cover shadow-lg shadow-black/40 ${
+                  isLive
+                    ? "border-red-500 ring-2 ring-red-500/40 shadow-red-500/20"
+                    : "border-emerald-500/40"
+                }`}
               />
+              {isLive && (
+                <span
+                  title={`Live on ${platformName}`}
+                  className="absolute -top-2 -right-2 rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-black uppercase text-white shadow-md animate-pulse"
+                >
+                  LIVE
+                </span>
+              )}
               {person.is_featured && (
                 <span
                   title="Featured"
@@ -127,6 +211,18 @@ export default function PersonProfilePage() {
                 <span className="rounded-full border border-neutral-700 bg-neutral-800/80 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-400">
                   {person.status || "Published"}
                 </span>
+                {isLive ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                    LIVE ON {platformName.toUpperCase()}
+                  </span>
+                ) : (
+                  liveStatus && (
+                    <span className="rounded-full border border-neutral-700 bg-neutral-800/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase text-neutral-400">
+                      Offline
+                    </span>
+                  )
+                )}
               </div>
 
               {/* Categories */}
@@ -165,6 +261,40 @@ export default function PersonProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Live Broadcast Spotlight Banner */}
+        {isLive && (
+          <div className="mt-8 rounded-xl border border-red-500/30 bg-red-500/10 p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  LIVE NOW
+                </span>
+                <span className="text-xs font-bold text-red-400 uppercase tracking-wide">
+                  {platformName}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-300">
+                {formattedViewers && (
+                  <span className="font-semibold text-white">
+                    {formattedViewers} viewers
+                  </span>
+                )}
+                {formattedStartTime && (
+                  <span className="text-neutral-400">
+                    Started at {formattedStartTime}
+                  </span>
+                )}
+              </div>
+            </div>
+            {liveStatus.stream_title && (
+              <h3 className="mt-3 text-sm font-semibold text-white sm:text-base">
+                {liveStatus.stream_title}
+              </h3>
+            )}
+          </div>
+        )}
 
         {/* Biography Section */}
         <div className="mt-8 border-t border-neutral-800/80 pt-6">
@@ -216,35 +346,65 @@ export default function PersonProfilePage() {
           </h2>
           {person.platform_accounts && person.platform_accounts.length > 0 ? (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {person.platform_accounts.map((acc) => (
-                <a
-                  key={acc.id}
-                  href={acc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-950/60 p-3.5 transition-all hover:border-emerald-500/40 hover:bg-neutral-950/90 hover:text-emerald-300"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-900 border border-neutral-800 text-emerald-400 font-bold text-xs">
-                      {acc.platform?.name?.charAt(0) || "P"}
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-white">
-                        {acc.platform?.name}
+              {person.platform_accounts.map((acc) => {
+                const isAccLive =
+                  isLive &&
+                  (acc.handle?.toLowerCase() === liveStatus?.handle?.toLowerCase() ||
+                    acc.platform?.slug?.toLowerCase() === liveStatus?.platform?.toLowerCase());
+                return (
+                  <a
+                    key={acc.id}
+                    href={acc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${acc.platform?.name} profile of ${person.display_name}${isAccLive ? " (Live now)" : ""}`}
+                    className={`flex items-center justify-between rounded-xl border p-3.5 transition-all ${
+                      isAccLive
+                        ? "border-red-500/40 bg-red-950/20 hover:border-red-500/60 hover:bg-red-950/40 text-red-300"
+                        : "border-neutral-800 bg-neutral-950/60 hover:border-emerald-500/40 hover:bg-neutral-950/90 hover:text-emerald-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg border font-bold text-xs ${
+                          isAccLive
+                            ? "border-red-500/40 bg-red-900/40 text-red-400"
+                            : "border-neutral-800 bg-neutral-900 text-emerald-400"
+                        }`}
+                      >
+                        {acc.platform?.name?.charAt(0) || "P"}
                       </div>
-                      <div className="text-xs text-neutral-400">@{acc.handle}</div>
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                          <span>{acc.platform?.name}</span>
+                          {isAccLive && (
+                            <span className="inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.2 text-[9px] font-bold uppercase text-white">
+                              <span className="h-1 w-1 rounded-full bg-white animate-pulse" />
+                              LIVE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-neutral-400">@{acc.handle}</div>
+                      </div>
                     </div>
-                  </div>
-                  {acc.is_verified && (
-                    <span
-                      title="Verified Platform Handle"
-                      className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20"
-                    >
-                      Verified
-                    </span>
-                  )}
-                </a>
-              ))}
+                    <div className="flex items-center gap-1.5">
+                      {isAccLive && formattedViewers && (
+                        <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                          {formattedViewers} viewers
+                        </span>
+                      )}
+                      {acc.is_verified && (
+                        <span
+                          title="Verified Platform Handle"
+                          className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                        >
+                          Verified
+                        </span>
+                      )}
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           ) : (
             <p className="mt-2 text-xs text-neutral-400">

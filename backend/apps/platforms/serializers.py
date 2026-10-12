@@ -48,3 +48,43 @@ class PlatformAccountSerializer(serializers.ModelSerializer):
             "is_verified",
         ]
         read_only_fields = fields
+
+
+from rest_framework import serializers
+
+from apps.platforms.models import PlatformLiveStatus
+
+
+class PlatformLiveStatusSerializer(serializers.ModelSerializer):
+    handle = serializers.CharField(
+        source="platform_account.handle",
+        read_only=True,
+    )
+    platform = serializers.CharField(
+        source="platform_account.platform.slug",
+        read_only=True,
+    )
+    person_slug = serializers.CharField(
+        source="platform_account.person.slug",
+        read_only=True,
+    )
+    display_name = serializers.CharField(
+        source="platform_account.person.display_name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = PlatformLiveStatus
+        fields = [
+            "handle",
+            "platform",
+            "person_slug",
+            "display_name",
+            "is_live",
+            "stream_title",
+            "viewer_count",
+            "stream_started_at",
+            "last_seen_live_at",
+            "last_stream_ended_at",
+            "last_checked_at",
+        ]

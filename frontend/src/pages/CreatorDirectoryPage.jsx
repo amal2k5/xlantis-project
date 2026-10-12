@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getPeople, getCategories, getFactions } from "../services/api";
+import { getPeople, getCategories, getFactions, getLiveStatuses } from "../services/api";
 import PersonCard from "../components/people/PersonCard";
 import Loading from "../components/common/Loading";
 import EmptyState from "../components/common/EmptyState";
@@ -13,6 +13,7 @@ export default function CreatorDirectoryPage() {
   const [people, setPeople] = useState([]);
   const [categories, setCategories] = useState([]);
   const [factions, setFactions] = useState([]);
+  const [liveStatuses, setLiveStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -43,6 +44,49 @@ export default function CreatorDirectoryPage() {
       isMounted = false;
     };
   }, []);
+
+  // Poll live statuses periodically (~60 seconds)
+  useEffect(() => {
+    let isMounted = true;
+    let isFetching = false;
+
+    const fetchLive = async () => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const data = await getLiveStatuses();
+        if (isMounted && Array.isArray(data)) {
+          setLiveStatuses(data);
+        }
+      } catch (err) {
+        // Log error but do not break or clear directory data
+        console.warn("Failed to fetch live statuses:", err?.message || err);
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    fetchLive();
+    const intervalId = setInterval(fetchLive, 60000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  // Map live statuses by person_slug for quick lookup
+  const liveStatusMap = useMemo(() => {
+    const map = {};
+    if (Array.isArray(liveStatuses)) {
+      liveStatuses.forEach((status) => {
+        if (status?.person_slug) {
+          map[status.person_slug] = status;
+        }
+      });
+    }
+    return map;
+  }, [liveStatuses]);
 
   // Handle faction filter selection via searchParams
   const handleFactionChange = (slug) => {
@@ -236,7 +280,11 @@ export default function CreatorDirectoryPage() {
             </div>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredPeople.map((person) => (
-                <PersonCard key={person.id || person.slug} person={person} />
+                <PersonCard
+                  key={person.id || person.slug}
+                  person={person}
+                  liveStatus={liveStatusMap[person.slug]}
+                />
               ))}
             </div>
           </div>

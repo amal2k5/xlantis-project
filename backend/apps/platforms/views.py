@@ -6,7 +6,11 @@ from rest_framework.permissions import AllowAny
 
 from apps.platforms.models import Platform
 from apps.platforms.serializers import PlatformSerializer
-
+from apps.platforms.models import Platform, PlatformLiveStatus
+from apps.platforms.serializers import (
+    PlatformLiveStatusSerializer,
+    PlatformSerializer,
+)
 
 class PlatformListView(generics.ListAPIView):
     """Public read-only list of active external platforms.
@@ -32,3 +36,36 @@ class PlatformListView(generics.ListAPIView):
 
 # Backwards compatibility alias for the root platform route
 PlatformsRootView = PlatformListView
+
+
+class PlatformLiveStatusListView(generics.ListAPIView):
+    """Public read-only list of the latest platform live statuses."""
+
+    serializer_class = PlatformLiveStatusSerializer
+    permission_classes = [AllowAny]
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        params = self.request.query_params
+        allowed = {"page", "page_size", "format"}
+        unrecognized = set(params.keys()) - allowed
+
+        if unrecognized:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Unrecognized query parameter(s): "
+                        f"{', '.join(sorted(unrecognized))}."
+                    )
+                }
+            )
+
+        return (
+            PlatformLiveStatus.objects
+            .filter(platform_account__platform__is_active=True)
+            .select_related(
+                "platform_account__platform",
+                "platform_account__person",
+            )
+            .order_by("-is_live", "-viewer_count", "platform_account__handle")
+        )

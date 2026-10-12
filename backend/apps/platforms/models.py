@@ -112,3 +112,34 @@ class PlatformAccount(models.Model):
             raise ValidationError(
                 "At least one of handle or external_id must be provided for a platform account."
             )
+
+
+
+class PlatformLiveStatus(models.Model):
+    """Stores the latest livestream status for a platform account."""
+
+    platform_account = models.OneToOneField(
+        PlatformAccount,
+        on_delete=models.CASCADE,
+        related_name="live_status",
+    )
+
+    is_live = models.BooleanField(default=False, db_index=True)
+    stream_title = models.CharField(max_length=255, blank=True)
+    viewer_count = models.PositiveIntegerField(default=0)
+
+    stream_started_at = models.DateTimeField(null=True, blank=True)
+    last_seen_live_at = models.DateTimeField(null=True, blank=True)
+    last_stream_ended_at = models.DateTimeField(null=True, blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform Live Status"
+        verbose_name_plural = "Platform Live Statuses"
+
+    def __str__(self):
+        status = "LIVE" if self.is_live else "OFFLINE"
+        return f"{self.platform_account} - {status}"
