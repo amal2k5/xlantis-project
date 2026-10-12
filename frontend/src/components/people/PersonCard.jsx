@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 export default function PersonCard({ person }) {
   if (!person) return null;
 
-  // Find active faction membership (ended_on is null)
+  // memberships and platform_accounts are only present in detail responses.
+  // In list views these will be undefined — we guard access with optional chaining.
   const currentMembership = person.memberships?.find((m) => !m.ended_on);
   const currentFaction = currentMembership?.faction;
 
@@ -85,6 +86,7 @@ export default function PersonCard({ person }) {
       {/* Footer: Platforms & View Profile Action */}
       <div className="mt-5 flex items-center justify-between border-t border-neutral-800/80 pt-3">
         <div className="flex items-center gap-2">
+          {/* platform_accounts only available in detail responses — safe to omit in list */}
           {person.platform_accounts?.slice(0, 3).map((acc) => (
             <a
               key={acc.id}

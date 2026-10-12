@@ -5,7 +5,7 @@ import Loading from "../components/common/Loading";
 
 export default function PersonProfilePage() {
   const { slug } = useParams();
-  const [personState, setPersonState] = useState({ slug: null, data: null });
+  const [personState, setPersonState] = useState({ slug: null, data: null, error: null });
 
   useEffect(() => {
     let isMounted = true;
@@ -13,12 +13,16 @@ export default function PersonProfilePage() {
     getPersonBySlug(slug)
       .then((data) => {
         if (isMounted) {
-          setPersonState({ slug, data: data || null });
+          setPersonState({ slug, data: data || null, error: null });
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (isMounted) {
-          setPersonState({ slug, data: null });
+          setPersonState({
+            slug,
+            data: null,
+            error: err?.message || "Failed to load profile.",
+          });
         }
       });
 
@@ -29,11 +33,29 @@ export default function PersonProfilePage() {
 
   const loading = personState.slug !== slug;
   const person = personState.data;
+  const error = personState.error;
 
   if (loading) {
     return <Loading message="Loading profile details..." />;
   }
 
+  // Network / server error (distinct from "not found")
+  if (error) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-bold text-white">Unable to Load Profile</h1>
+        <p className="mt-2 text-sm text-neutral-400">{error}</p>
+        <Link
+          to="/creators"
+          className="mt-6 inline-flex items-center rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-neutral-950 hover:bg-emerald-400"
+        >
+          &larr; Back to Creators Directory
+        </Link>
+      </div>
+    );
+  }
+
+  // Profile not found (404 or null response)
   if (!person) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:px-8">

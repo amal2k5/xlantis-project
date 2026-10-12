@@ -7,6 +7,7 @@ import EmptyState from "../components/common/EmptyState";
 export default function GangDirectoryPage() {
   const [factions, setFactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -20,8 +21,9 @@ export default function GangDirectoryPage() {
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (isMounted) {
+          setError(err?.message || "Failed to load factions.");
           setLoading(false);
         }
       });
@@ -70,6 +72,13 @@ export default function GangDirectoryPage() {
           Official registry of gangs, syndicates, departments, and organizations in Xlantis.
         </p>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+          <strong className="font-semibold">Error:</strong> {error}
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -152,10 +161,14 @@ export default function GangDirectoryPage() {
           </div>
         ) : (
           <EmptyState
-            title="No factions or gangs found"
-            description="No organizations match your current search criteria."
-            actionLabel="Reset Search"
-            onAction={resetFilters}
+            title={error ? "Unable to load factions" : "No factions or gangs found"}
+            description={
+              error
+                ? "The server could not be reached. Please try again later."
+                : "No organizations match your current search criteria."
+            }
+            actionLabel={error ? undefined : "Reset Search"}
+            onAction={error ? undefined : resetFilters}
           />
         )}
       </div>

@@ -4,6 +4,7 @@ import { getFeaturedPeople, getFactions, getPeople } from "../services/api";
 import PersonCard from "../components/people/PersonCard";
 import FactionCard from "../components/factions/FactionCard";
 import Loading from "../components/common/Loading";
+import EmptyState from "../components/common/EmptyState";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function HomePage() {
   const [factionsPreview, setFactionsPreview] = useState([]);
   const [allCreators, setAllCreators] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -25,8 +27,9 @@ export default function HomePage() {
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (isMounted) {
+          setError(err?.message || "Failed to load directory data.");
           setLoading(false);
         }
       });
@@ -121,16 +124,16 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {/* Server Stats Indicators */}
+            {/* Server Stats Indicators — static promotional text, not database counts */}
             <div className="mt-12 grid grid-cols-3 gap-3 border-t border-neutral-800/80 pt-8 text-center">
               <div>
-                <div className="text-xl font-black text-white sm:text-2xl">45+</div>
+                <div className="text-xl font-black text-white sm:text-2xl">Open</div>
                 <div className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                  Active Citizens
+                  Community
                 </div>
               </div>
               <div>
-                <div className="text-xl font-black text-emerald-400 sm:text-2xl">10+</div>
+                <div className="text-xl font-black text-emerald-400 sm:text-2xl">Growing</div>
                 <div className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
                   Gangs & Orgs
                 </div>
@@ -145,6 +148,15 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Error Alert — shown if the API is unreachable */}
+      {error && (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+            <strong className="font-semibold">Connection error:</strong> {error}
+          </div>
+        </div>
+      )}
 
       {/* 2. Featured People Section */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -171,12 +183,19 @@ export default function HomePage() {
         <div className="mt-6">
           {loading ? (
             <Loading message="Loading featured personalities..." />
-          ) : (
+          ) : featuredPeople.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {featuredPeople.map((person) => (
                 <PersonCard key={person.id || person.slug} person={person} />
               ))}
             </div>
+          ) : (
+            !error && (
+              <EmptyState
+                title="No featured profiles yet"
+                description="Featured roleplayers and streamers will appear here once added to the directory."
+              />
+            )
           )}
         </div>
       </section>
@@ -206,12 +225,19 @@ export default function HomePage() {
         <div className="mt-6">
           {loading ? (
             <Loading message="Loading gangs..." />
-          ) : (
+          ) : factionsPreview.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {factionsPreview.map((faction) => (
                 <FactionCard key={faction.id || faction.slug} faction={faction} />
               ))}
             </div>
+          ) : (
+            !error && (
+              <EmptyState
+                title="No factions registered yet"
+                description="Gangs and organizations will appear here once added to the directory."
+              />
+            )
           )}
         </div>
       </section>
@@ -243,35 +269,40 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 border-t border-neutral-800/80 pt-6">
-            {allCreators.map((creator) => (
-              <div
-                key={creator.id}
-                className="flex items-center gap-3 rounded-lg border border-neutral-800/80 bg-neutral-950/40 p-3"
-              >
-                <img
-                  src={creator.avatar_url}
-                  alt={creator.display_name}
-                  width={40}
-                  height={40}
-                  loading="lazy"
-                  className="h-10 w-10 rounded-full border border-neutral-700 object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/person/${creator.slug}`}
-                    className="block truncate text-xs font-bold text-white hover:text-emerald-400"
-                  >
-                    {creator.display_name}
-                  </Link>
-                  <span className="text-[11px] text-neutral-400 truncate block">
-                    {creator.platform_accounts?.[0]?.platform?.name} @
-                    {creator.platform_accounts?.[0]?.handle || "live"}
-                  </span>
+          {allCreators.length > 0 && (
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 border-t border-neutral-800/80 pt-6">
+              {allCreators.map((creator) => (
+                <div
+                  key={creator.id}
+                  className="flex items-center gap-3 rounded-lg border border-neutral-800/80 bg-neutral-950/40 p-3"
+                >
+                  <img
+                    src={creator.avatar_url}
+                    alt={creator.display_name}
+                    width={40}
+                    height={40}
+                    loading="lazy"
+                    className="h-10 w-10 rounded-full border border-neutral-700 object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/person/${creator.slug}`}
+                      className="block truncate text-xs font-bold text-white hover:text-emerald-400"
+                    >
+                      {creator.display_name}
+                    </Link>
+                    {/* platform_accounts are not available in list responses;
+                        show categories as a compact fallback */}
+                    <span className="text-[11px] text-neutral-400 truncate block">
+                      {creator.platform_accounts?.[0]
+                        ? `${creator.platform_accounts[0].platform?.name} @${creator.platform_accounts[0].handle}`
+                        : creator.categories?.map((c) => c.name).join(", ") || "Creator"}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

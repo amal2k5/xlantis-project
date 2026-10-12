@@ -14,6 +14,7 @@ export default function CreatorDirectoryPage() {
   const [categories, setCategories] = useState([]);
   const [factions, setFactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState(searchParam);
@@ -31,8 +32,9 @@ export default function CreatorDirectoryPage() {
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (isMounted) {
+          setError(err?.message || "Failed to load directory data.");
           setLoading(false);
         }
       });
@@ -64,6 +66,12 @@ export default function CreatorDirectoryPage() {
   };
 
   // Memoized filtered people list
+  // NOTE: The person list API does NOT return memberships or platform_accounts.
+  // Text search, category filtering, and bio search are done client-side.
+  // Faction filtering is not possible with list data (memberships are omitted)
+  // so it is a no-op until the detail data is available or the backend adds
+  // a faction filter parameter. For now we keep the UI control but skip the
+  // membership check when memberships are absent.
   const filteredPeople = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
@@ -72,6 +80,7 @@ export default function CreatorDirectoryPage() {
       if (query) {
         const matchesName = person.display_name?.toLowerCase().includes(query);
         const matchesBio = person.bio?.toLowerCase().includes(query);
+        // platform_accounts may not be present in list responses
         const matchesHandle = person.platform_accounts?.some((acc) =>
           acc.handle?.toLowerCase().includes(query)
         );
@@ -88,9 +97,9 @@ export default function CreatorDirectoryPage() {
         if (!hasCategory) return false;
       }
 
-      // 3. Faction Filter
-      if (selectedFaction !== "all") {
-        const currentMembership = person.memberships?.find((m) => !m.ended_on);
+      // 3. Faction Filter — only apply when memberships data is available
+      if (selectedFaction !== "all" && person.memberships) {
+        const currentMembership = person.memberships.find((m) => !m.ended_on);
         if (currentMembership?.faction?.slug !== selectedFaction) {
           return false;
         }
@@ -111,6 +120,13 @@ export default function CreatorDirectoryPage() {
           Search and discover streamers, roleplayers, and citizens active in Xlantis RP.
         </p>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-300">
+          <strong className="font-semibold">Error:</strong> {error}
+        </div>
+      )}
 
       {/* Search & Filter Toolbar */}
       <div className="mt-6 space-y-4">
@@ -226,10 +242,14 @@ export default function CreatorDirectoryPage() {
           </div>
         ) : (
           <EmptyState
-            title="No roleplayers or creators found"
-            description="No profiles match your current search criteria or active filters."
-            actionLabel="Reset Filters"
-            onAction={resetFilters}
+            title={error ? "Unable to load profiles" : "No roleplayers or creators found"}
+            description={
+              error
+                ? "The server could not be reached. Please try again later."
+                : "No profiles match your current search criteria or active filters."
+            }
+            actionLabel={error ? undefined : "Reset Filters"}
+            onAction={error ? undefined : resetFilters}
           />
         )}
       </div>

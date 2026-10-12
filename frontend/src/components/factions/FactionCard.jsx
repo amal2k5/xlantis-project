@@ -35,9 +35,9 @@ export default function FactionCard({ faction }) {
                   {faction.name}
                 </h3>
               </div>
-              {faction.member_count && (
+              {typeof faction.member_count === "number" && (
                 <span className="text-xs text-neutral-400">
-                  {faction.member_count} Known Affiliates
+                  {faction.member_count} Known {faction.member_count === 1 ? "Affiliate" : "Affiliates"}
                 </span>
               )}
             </div>
