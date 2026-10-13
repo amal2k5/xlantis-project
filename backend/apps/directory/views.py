@@ -3,6 +3,7 @@
 from django.db.models import Count, Prefetch, Q
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +24,14 @@ from apps.directory.serializers import (
     PersonListSerializer,
 )
 from apps.platforms.models import PlatformAccount
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    """Configurable pagination supporting ?page= and ?page_size= parameters."""
+
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 
 class DirectoryRootView(APIView):
@@ -47,7 +56,9 @@ class PersonListView(generics.ListAPIView):
     Supports:
     - Search by display_name and bio: `?search=<term>`
     - Filter by active category slug: `?category=<category-slug>`
+    - Filter by public faction slug: `?faction=<faction-slug>`
     - Filter by featured status: `?featured=true` or `?featured=false`
+    - Pagination: `?page=<number>&page_size=<size>`
 
     Query parameters are strictly validated; invalid values or unrecognized
     parameters return HTTP 400 Bad Request.
@@ -55,12 +66,13 @@ class PersonListView(generics.ListAPIView):
     """
 
     serializer_class = PersonListSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [AllowAny]
     http_method_names = ["get", "head", "options"]
 
     def get_queryset(self):
         params = self.request.query_params
-        allowed = {"search", "category", "featured", "page", "page_size", "format"}
+        allowed = {"search", "category", "faction", "featured", "page", "page_size", "format"}
         unrecognized = set(params.keys()) - allowed
         if unrecognized:
             raise ValidationError(
@@ -97,7 +109,29 @@ class PersonListView(generics.ListAPIView):
                 )
             queryset = queryset.filter(categories__slug=category_slug)
 
-        # 3. Filter by featured status
+        # 3. Filter by public faction slug (current memberships only)
+        if "faction" in params:
+            faction_slug = (params.get("faction") or "").strip()
+            if (
+                not faction_slug
+                or not Faction.objects.filter(
+                    slug=faction_slug, status__in=PUBLIC_FACTION_STATUSES
+                ).exists()
+            ):
+                raise ValidationError(
+                    {
+                        "faction": [
+                            f"Invalid faction '{faction_slug}'. "
+                            "Faction does not exist or is not public."
+                        ]
+                    }
+                )
+            queryset = queryset.filter(
+                memberships__faction__slug=faction_slug,
+                memberships__ended_on__isnull=True,
+            )
+
+        # 4. Filter by featured status
         if "featured" in params:
             featured_val = (params.get("featured") or "").strip().lower()
             if featured_val in ("true", "1"):
@@ -157,6 +191,7 @@ class FactionListView(generics.ListAPIView):
     """
 
     serializer_class = FactionListSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [AllowAny]
     http_method_names = ["get", "head", "options"]
 

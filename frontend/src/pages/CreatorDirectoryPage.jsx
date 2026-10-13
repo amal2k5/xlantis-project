@@ -5,37 +5,100 @@ import PersonCard from "../components/people/PersonCard";
 import Loading from "../components/common/Loading";
 import EmptyState from "../components/common/EmptyState";
 
+const PAGE_SIZE = 24;
+
 export default function CreatorDirectoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParam = searchParams.get("search") || "";
-  const selectedFaction = searchParams.get("faction") || "all";
+  const categoryParam = searchParams.get("category") || "all";
+  const factionParam = searchParams.get("faction") || "all";
+  const pageParam = parseInt(searchParams.get("page") || "1", 10) || 1;
 
+  // Filter & search states
+  const [searchTerm, setSearchTerm] = useState(searchParam);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParam);
+  const [selectedCategory, setSelectedCategory] = useState(categoryParam);
+  const [selectedFaction, setSelectedFaction] = useState(factionParam);
+  const [currentPage, setCurrentPage] = useState(pageParam);
+
+  // Data states
   const [people, setPeople] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [categories, setCategories] = useState([]);
   const [factions, setFactions] = useState([]);
   const [liveStatuses, setLiveStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState(searchParam);
-  const [selectedCategory, setSelectedCategory] = useState("all");
-
+  // Load filter options (categories & factions) once on mount
   useEffect(() => {
     let isMounted = true;
 
-    Promise.all([getPeople(), getCategories(), getFactions()])
-      .then(([peopleData, categoriesData, factionsData]) => {
+    Promise.all([getCategories(), getFactions({ page_size: 100 })])
+      .then(([categoriesData, factionsData]) => {
         if (isMounted) {
-          setPeople(peopleData || []);
           setCategories(categoriesData || []);
           setFactions(factionsData || []);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load filter metadata:", err?.message || err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Debounce search input (300ms) to prevent unnecessary requests while typing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  // Synchronize URL parameters with current filters & pagination
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+    if (debouncedSearch.trim()) nextParams.set("search", debouncedSearch.trim());
+    if (selectedCategory !== "all") nextParams.set("category", selectedCategory);
+    if (selectedFaction !== "all") nextParams.set("faction", selectedFaction);
+    if (currentPage > 1) nextParams.set("page", String(currentPage));
+    setSearchParams(nextParams, { replace: true });
+  }, [debouncedSearch, selectedCategory, selectedFaction, currentPage, setSearchParams]);
+
+  // Query the backend API whenever filters, search, or page change
+  useEffect(() => {
+    let isMounted = true;
+
+    const queryOptions = {
+      search: debouncedSearch.trim() || undefined,
+      category: selectedCategory !== "all" ? selectedCategory : undefined,
+      faction: selectedFaction !== "all" ? selectedFaction : undefined,
+      page: currentPage,
+      page_size: PAGE_SIZE,
+      paginated: true,
+    };
+
+    getPeople(queryOptions)
+      .then((data) => {
+        if (isMounted) {
+          setPeople(data?.results || []);
+          setTotalCount(data?.count || 0);
+          setError(null);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (isMounted) {
           setError(err?.message || "Failed to load directory data.");
+          setPeople([]);
+          setTotalCount(0);
           setLoading(false);
         }
       });
@@ -43,7 +106,7 @@ export default function CreatorDirectoryPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [debouncedSearch, selectedCategory, selectedFaction, currentPage]);
 
   // Poll live statuses periodically (~60 seconds)
   useEffect(() => {
@@ -59,7 +122,6 @@ export default function CreatorDirectoryPage() {
           setLiveStatuses(data);
         }
       } catch (err) {
-        // Log error but do not break or clear directory data
         console.warn("Failed to fetch live statuses:", err?.message || err);
       } finally {
         isFetching = false;
@@ -88,70 +150,26 @@ export default function CreatorDirectoryPage() {
     return map;
   }, [liveStatuses]);
 
-  // Handle faction filter selection via searchParams
-  const handleFactionChange = (slug) => {
-    const nextParams = new URLSearchParams(searchParams);
-    if (slug === "all") {
-      nextParams.delete("faction");
-    } else {
-      nextParams.set("faction", slug);
-    }
-    setSearchParams(nextParams);
+  // Filter change handlers
+  const handleCategoryChange = (slug) => {
+    setSelectedCategory(slug);
+    setCurrentPage(1);
   };
 
-  // Reset all filters
+  const handleFactionChange = (slug) => {
+    setSelectedFaction(slug);
+    setCurrentPage(1);
+  };
+
   const resetFilters = () => {
     setSearchTerm("");
+    setDebouncedSearch("");
     setSelectedCategory("all");
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("faction");
-    nextParams.delete("search");
-    setSearchParams(nextParams);
+    setSelectedFaction("all");
+    setCurrentPage(1);
   };
 
-  // Memoized filtered people list
-  // NOTE: The person list API does NOT return memberships or platform_accounts.
-  // Text search, category filtering, and bio search are done client-side.
-  // Faction filtering is not possible with list data (memberships are omitted)
-  // so it is a no-op until the detail data is available or the backend adds
-  // a faction filter parameter. For now we keep the UI control but skip the
-  // membership check when memberships are absent.
-  const filteredPeople = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-
-    return people.filter((person) => {
-      // 1. Text Search (Name, Bio, or Platform handle)
-      if (query) {
-        const matchesName = person.display_name?.toLowerCase().includes(query);
-        const matchesBio = person.bio?.toLowerCase().includes(query);
-        // platform_accounts may not be present in list responses
-        const matchesHandle = person.platform_accounts?.some((acc) =>
-          acc.handle?.toLowerCase().includes(query)
-        );
-        if (!matchesName && !matchesBio && !matchesHandle) {
-          return false;
-        }
-      }
-
-      // 2. Category Filter
-      if (selectedCategory !== "all") {
-        const hasCategory = person.categories?.some(
-          (cat) => cat.slug === selectedCategory
-        );
-        if (!hasCategory) return false;
-      }
-
-      // 3. Faction Filter — only apply when memberships data is available
-      if (selectedFaction !== "all" && person.memberships) {
-        const currentMembership = person.memberships.find((m) => !m.ended_on);
-        if (currentMembership?.faction?.slug !== selectedFaction) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [people, searchTerm, selectedCategory, selectedFaction]);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -201,7 +219,7 @@ export default function CreatorDirectoryPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by character name, bio, or handle..."
+              placeholder="Search by character name or bio..."
               className="w-full rounded-xl border border-neutral-800 bg-neutral-900/80 py-2.5 pl-10 pr-4 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
@@ -231,7 +249,7 @@ export default function CreatorDirectoryPage() {
         <div className="flex flex-wrap items-center gap-2 pt-1" role="toolbar" aria-label="Category Filters">
           <button
             type="button"
-            onClick={() => setSelectedCategory("all")}
+            onClick={() => handleCategoryChange("all")}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
               selectedCategory === "all"
                 ? "bg-emerald-500 text-neutral-950 shadow-sm"
@@ -244,7 +262,7 @@ export default function CreatorDirectoryPage() {
             <button
               key={cat.id || cat.slug}
               type="button"
-              onClick={() => setSelectedCategory(cat.slug)}
+              onClick={() => handleCategoryChange(cat.slug)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
                 selectedCategory === cat.slug
                   ? "bg-emerald-500 text-neutral-950 shadow-sm"
@@ -261,14 +279,15 @@ export default function CreatorDirectoryPage() {
       <div className="mt-8">
         {loading ? (
           <Loading message="Fetching directory profiles..." />
-        ) : filteredPeople.length > 0 ? (
+        ) : people.length > 0 ? (
           <div>
             <div className="mb-4 flex items-center justify-between text-xs text-neutral-400">
               <span>
-                Showing <strong className="text-neutral-200">{filteredPeople.length}</strong> profile
-                {filteredPeople.length === 1 ? "" : "s"}
+                Showing <strong className="text-neutral-200">{people.length}</strong> of{" "}
+                <strong className="text-neutral-200">{totalCount}</strong> profile
+                {totalCount === 1 ? "" : "s"}
               </span>
-              {(searchTerm || selectedCategory !== "all" || selectedFaction !== "all") && (
+              {(debouncedSearch || selectedCategory !== "all" || selectedFaction !== "all") && (
                 <button
                   type="button"
                   onClick={resetFilters}
@@ -278,8 +297,9 @@ export default function CreatorDirectoryPage() {
                 </button>
               )}
             </div>
+
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredPeople.map((person) => (
+              {people.map((person) => (
                 <PersonCard
                   key={person.id || person.slug}
                   person={person}
@@ -287,6 +307,32 @@ export default function CreatorDirectoryPage() {
                 />
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-between border-t border-neutral-800/80 pt-4 text-xs">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-1.5 font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  &larr; Previous
+                </button>
+                <span className="text-neutral-400">
+                  Page <strong className="text-neutral-200">{currentPage}</strong> of{" "}
+                  <strong className="text-neutral-200">{totalPages}</strong>
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-1.5 font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next &rarr;
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <EmptyState

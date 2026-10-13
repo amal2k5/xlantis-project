@@ -180,3 +180,9 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
     },
 }
+
+# Live status staleness threshold (in seconds).
+# Celery Beat polls external platforms every 60 seconds. A status not refreshed
+# within 300s (5 minutes / 5 missed sync intervals) is considered stale and treated as offline.
+LIVE_STATUS_STALE_THRESHOLD_SECONDS = env.int("LIVE_STATUS_STALE_THRESHOLD_SECONDS", default=300)
+

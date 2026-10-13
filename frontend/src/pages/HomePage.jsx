@@ -6,6 +6,9 @@ import FactionCard from "../components/factions/FactionCard";
 import Loading from "../components/common/Loading";
 import EmptyState from "../components/common/EmptyState";
 
+const DEFAULT_AVATAR =
+  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80";
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
@@ -277,11 +280,15 @@ export default function HomePage() {
                   className="flex items-center gap-3 rounded-lg border border-neutral-800/80 bg-neutral-950/40 p-3"
                 >
                   <img
-                    src={creator.avatar_url}
+                    src={creator.avatar_url || DEFAULT_AVATAR}
                     alt={creator.display_name}
                     width={40}
                     height={40}
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = DEFAULT_AVATAR;
+                    }}
                     className="h-10 w-10 rounded-full border border-neutral-700 object-cover"
                   />
                   <div className="min-w-0 flex-1">

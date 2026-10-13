@@ -1,29 +1,77 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getFactions } from "../services/api";
 import FactionCard from "../components/factions/FactionCard";
 import Loading from "../components/common/Loading";
 import EmptyState from "../components/common/EmptyState";
 
+const PAGE_SIZE = 24;
+
 export default function GangDirectoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParam = searchParams.get("search") || "";
+  const statusParam = searchParams.get("status") || "all";
+  const pageParam = parseInt(searchParams.get("page") || "1", 10) || 1;
+
+  // Filter & search states
+  const [searchTerm, setSearchTerm] = useState(searchParam);
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParam);
+  const [statusFilter, setStatusFilter] = useState(statusParam);
+  const [currentPage, setCurrentPage] = useState(pageParam);
+
+  // Data states
   const [factions, setFactions] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
 
+  // Debounce search input (300ms) to avoid querying on every keystroke
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  // Synchronize URL parameters with active filters & pagination
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+    if (debouncedSearch.trim()) nextParams.set("search", debouncedSearch.trim());
+    if (statusFilter !== "all") nextParams.set("status", statusFilter);
+    if (currentPage > 1) nextParams.set("page", String(currentPage));
+    setSearchParams(nextParams, { replace: true });
+  }, [debouncedSearch, statusFilter, currentPage, setSearchParams]);
+
+  // Query backend API whenever search, status filter, or page changes
   useEffect(() => {
     let isMounted = true;
 
-    getFactions()
+    const queryOptions = {
+      search: debouncedSearch.trim() || undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      page: currentPage,
+      page_size: PAGE_SIZE,
+      paginated: true,
+    };
+
+    getFactions(queryOptions)
       .then((data) => {
         if (isMounted) {
-          setFactions(data || []);
+          setFactions(data?.results || []);
+          setTotalCount(data?.count || 0);
+          setError(null);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (isMounted) {
           setError(err?.message || "Failed to load factions.");
+          setFactions([]);
+          setTotalCount(0);
           setLoading(false);
         }
       });
@@ -31,35 +79,21 @@ export default function GangDirectoryPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [debouncedSearch, statusFilter, currentPage]);
+
+  const handleStatusChange = (status) => {
+    setStatusFilter(status);
+    setCurrentPage(1);
+  };
 
   const resetFilters = () => {
     setSearchTerm("");
+    setDebouncedSearch("");
     setStatusFilter("all");
+    setCurrentPage(1);
   };
 
-  const filteredFactions = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-
-    return factions.filter((faction) => {
-      // 1. Text search
-      if (query) {
-        const matchesName = faction.name?.toLowerCase().includes(query);
-        const matchesTag = faction.tag?.toLowerCase().includes(query);
-        const matchesDesc = faction.description?.toLowerCase().includes(query);
-        if (!matchesName && !matchesTag && !matchesDesc) {
-          return false;
-        }
-      }
-
-      // 2. Status filter
-      if (statusFilter !== "all" && faction.status !== statusFilter) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [factions, searchTerm, statusFilter]);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -119,7 +153,7 @@ export default function GangDirectoryPage() {
             <button
               key={status}
               type="button"
-              onClick={() => setStatusFilter(status)}
+              onClick={() => handleStatusChange(status)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
                 statusFilter === status
                   ? "bg-emerald-500 text-neutral-950 shadow-sm"
@@ -136,14 +170,15 @@ export default function GangDirectoryPage() {
       <div className="mt-8">
         {loading ? (
           <Loading message="Loading factions and gangs..." />
-        ) : filteredFactions.length > 0 ? (
+        ) : factions.length > 0 ? (
           <div>
             <div className="mb-4 flex items-center justify-between text-xs text-neutral-400">
               <span>
-                Showing <strong className="text-neutral-200">{filteredFactions.length}</strong> faction
-                {filteredFactions.length === 1 ? "" : "s"}
+                Showing <strong className="text-neutral-200">{factions.length}</strong> of{" "}
+                <strong className="text-neutral-200">{totalCount}</strong> faction
+                {totalCount === 1 ? "" : "s"}
               </span>
-              {(searchTerm || statusFilter !== "all") && (
+              {(debouncedSearch || statusFilter !== "all") && (
                 <button
                   type="button"
                   onClick={resetFilters}
@@ -153,11 +188,38 @@ export default function GangDirectoryPage() {
                 </button>
               )}
             </div>
+
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredFactions.map((faction) => (
+              {factions.map((faction) => (
                 <FactionCard key={faction.id || faction.slug} faction={faction} />
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-between border-t border-neutral-800/80 pt-4 text-xs">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-1.5 font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  &larr; Previous
+                </button>
+                <span className="text-neutral-400">
+                  Page <strong className="text-neutral-200">{currentPage}</strong> of{" "}
+                  <strong className="text-neutral-200">{totalPages}</strong>
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-1.5 font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next &rarr;
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <EmptyState

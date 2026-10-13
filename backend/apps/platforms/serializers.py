@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.platforms.models import Platform, PlatformAccount
+from apps.platforms.models import Platform, PlatformAccount, PlatformLiveStatus
 
 
 class PlatformSerializer(serializers.ModelSerializer):
@@ -50,11 +50,6 @@ class PlatformAccountSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-from rest_framework import serializers
-
-from apps.platforms.models import PlatformLiveStatus
-
-
 class PlatformLiveStatusSerializer(serializers.ModelSerializer):
     handle = serializers.CharField(
         source="platform_account.handle",
@@ -72,6 +67,9 @@ class PlatformLiveStatusSerializer(serializers.ModelSerializer):
         source="platform_account.person.display_name",
         read_only=True,
     )
+    is_live = serializers.SerializerMethodField()
+    viewer_count = serializers.SerializerMethodField()
+    is_stale = serializers.SerializerMethodField()
 
     class Meta:
         model = PlatformLiveStatus
@@ -81,6 +79,7 @@ class PlatformLiveStatusSerializer(serializers.ModelSerializer):
             "person_slug",
             "display_name",
             "is_live",
+            "is_stale",
             "stream_title",
             "viewer_count",
             "stream_started_at",
@@ -88,3 +87,17 @@ class PlatformLiveStatusSerializer(serializers.ModelSerializer):
             "last_stream_ended_at",
             "last_checked_at",
         ]
+
+    def get_is_live(self, obj) -> bool:
+        if hasattr(obj, "effective_is_live"):
+            return bool(obj.effective_is_live)
+        return obj.is_currently_live()
+
+    def get_viewer_count(self, obj) -> int:
+        if hasattr(obj, "effective_viewer_count"):
+            return obj.effective_viewer_count
+        return obj.viewer_count if obj.is_currently_live() else 0
+
+    def get_is_stale(self, obj) -> bool:
+        return obj.is_stale
+

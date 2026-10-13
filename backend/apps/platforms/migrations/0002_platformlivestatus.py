@@ -14,7 +14,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='PlatformLiveStatus',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    'id',
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name='ID',
+                    ),
+                ),
                 ('is_live', models.BooleanField(db_index=True, default=False)),
                 ('stream_title', models.CharField(blank=True, max_length=255)),
                 ('viewer_count', models.PositiveIntegerField(default=0)),
@@ -24,7 +32,14 @@ class Migration(migrations.Migration):
                 ('last_checked_at', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('platform_account', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='live_status', to='platforms.platformaccount')),
+                (
+                    'platform_account',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='live_status',
+                        to='platforms.platformaccount',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'Platform Live Status',

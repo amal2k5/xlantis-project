@@ -321,7 +321,7 @@ export default function PersonProfilePage() {
                   <p className="mt-1 text-xs text-neutral-400">{faction.description}</p>
                 </div>
                 <Link
-                  to={`/creators?faction=${encodeURIComponent(faction.slug)}`}
+                  to={`/gangs/${encodeURIComponent(faction.slug)}`}
                   className="ml-4 shrink-0 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:border-emerald-500/50 hover:text-white"
                 >
                   View Roster

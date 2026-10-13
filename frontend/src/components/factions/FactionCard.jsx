@@ -60,7 +60,7 @@ export default function FactionCard({ faction }) {
       <div className="mt-5 border-t border-neutral-800/80 pt-3 flex items-center justify-between">
         <span className="text-xs text-neutral-500">Faction Directory</span>
         <Link
-          to={`/creators?faction=${encodeURIComponent(faction.slug)}`}
+          to={`/gangs/${encodeURIComponent(faction.slug)}`}
           className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 focus:outline-none focus:underline"
         >
           View Members

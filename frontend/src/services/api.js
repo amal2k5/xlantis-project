@@ -117,11 +117,15 @@ export async function getPeople(options = {}) {
     const params = {};
     if (options.search) params.search = options.search;
     if (options.category) params.category = options.category;
+    if (options.faction) params.faction = options.faction;
     if (options.featured !== undefined) params.featured = options.featured;
     if (options.page) params.page = options.page;
     if (options.page_size) params.page_size = options.page_size;
 
     const response = await apiClient.get("/directory/persons/", { params });
+    if (options.paginated) {
+      return response.data;
+    }
     return unwrapResults(response.data);
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -172,7 +176,8 @@ export async function getPersonBySlug(slug) {
  * @param {string}  [options.status]     - Filter by status (active, inactive, disbanded).
  * @param {number}  [options.page]       - Page number.
  * @param {number}  [options.page_size]  - Items per page.
- * @returns {Promise<Array>} Array of faction list objects.
+ * @param {boolean} [options.paginated]  - Return full pagination object { count, next, previous, results }.
+ * @returns {Promise<Array|Object>} Array of faction list objects or paginated envelope.
  */
 export async function getFactions(options = {}) {
   try {
@@ -183,6 +188,9 @@ export async function getFactions(options = {}) {
     if (options.page_size) params.page_size = options.page_size;
 
     const response = await apiClient.get("/directory/factions/", { params });
+    if (options.paginated) {
+      return response.data;
+    }
     return unwrapResults(response.data);
   } catch (error) {
     if (error instanceof ApiError) throw error;

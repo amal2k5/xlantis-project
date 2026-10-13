@@ -52,3 +52,20 @@ def sync_kick_account(account: PlatformAccount) -> PlatformLiveStatus:
     status.save()
 
     return status
+
+
+def get_live_status(account: PlatformAccount) -> PlatformLiveStatus | None:
+    """Retrieve PlatformLiveStatus for an account or return None if not present."""
+    try:
+        return account.live_status
+    except PlatformLiveStatus.DoesNotExist:
+        return None
+
+
+def is_account_live(account: PlatformAccount, threshold_seconds: int | None = None) -> bool:
+    """Return True if the account has a registered live status that is currently live and fresh."""
+    status = get_live_status(account)
+    if status is None:
+        return False
+    return status.is_currently_live(threshold_seconds=threshold_seconds)
+

@@ -1,6 +1,10 @@
+from datetime import datetime, timedelta
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from apps.directory.slugs import generate_unique_slug
 
@@ -140,6 +144,51 @@ class PlatformLiveStatus(models.Model):
         verbose_name = "Platform Live Status"
         verbose_name_plural = "Platform Live Statuses"
 
+    DEFAULT_STALE_THRESHOLD_SECONDS = 300
+
     def __str__(self):
-        status = "LIVE" if self.is_live else "OFFLINE"
+        status = "LIVE" if self.is_currently_live() else "OFFLINE"
         return f"{self.platform_account} - {status}"
+
+    def is_currently_live(
+        self,
+        threshold_seconds: int | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """Return True only if marked is_live and verified within the stale threshold."""
+        if not self.is_live or not self.last_checked_at:
+            return False
+        if threshold_seconds is None:
+            threshold_seconds = getattr(
+                settings,
+                "LIVE_STATUS_STALE_THRESHOLD_SECONDS",
+                self.DEFAULT_STALE_THRESHOLD_SECONDS,
+            )
+        reference_time = now if now is not None else timezone.now()
+        cutoff = reference_time - timedelta(seconds=threshold_seconds)
+        return self.last_checked_at >= cutoff
+
+    def check_stale(
+        self,
+        threshold_seconds: int | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """Return True if the status record has not been verified within the stale threshold."""
+        if not self.last_checked_at:
+            return True
+        if threshold_seconds is None:
+            threshold_seconds = getattr(
+                settings,
+                "LIVE_STATUS_STALE_THRESHOLD_SECONDS",
+                self.DEFAULT_STALE_THRESHOLD_SECONDS,
+            )
+        reference_time = now if now is not None else timezone.now()
+        cutoff = reference_time - timedelta(seconds=threshold_seconds)
+        return self.last_checked_at < cutoff
+
+    @property
+    def is_stale(self) -> bool:
+        """Return True if the status record has not been verified within the stale threshold."""
+        return self.check_stale()
+
+

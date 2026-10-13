@@ -1,16 +1,20 @@
 """Views for the Platforms app."""
 
+from datetime import timedelta
+
+from django.conf import settings
+from django.db.models import BooleanField, Case, PositiveIntegerField, Value, When
+from django.utils import timezone
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 
-from apps.platforms.models import Platform
-from apps.platforms.serializers import PlatformSerializer
 from apps.platforms.models import Platform, PlatformLiveStatus
 from apps.platforms.serializers import (
     PlatformLiveStatusSerializer,
     PlatformSerializer,
 )
+
 
 class PlatformListView(generics.ListAPIView):
     """Public read-only list of active external platforms.
@@ -60,6 +64,13 @@ class PlatformLiveStatusListView(generics.ListAPIView):
                 }
             )
 
+        threshold_seconds = getattr(
+            settings,
+            "LIVE_STATUS_STALE_THRESHOLD_SECONDS",
+            PlatformLiveStatus.DEFAULT_STALE_THRESHOLD_SECONDS,
+        )
+        cutoff = timezone.now() - timedelta(seconds=threshold_seconds)
+
         return (
             PlatformLiveStatus.objects
             .filter(platform_account__platform__is_active=True)
@@ -67,5 +78,22 @@ class PlatformLiveStatusListView(generics.ListAPIView):
                 "platform_account__platform",
                 "platform_account__person",
             )
-            .order_by("-is_live", "-viewer_count", "platform_account__handle")
+            .annotate(
+                effective_is_live=Case(
+                    When(is_live=True, last_checked_at__gte=cutoff, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                effective_viewer_count=Case(
+                    When(is_live=True, last_checked_at__gte=cutoff, then="viewer_count"),
+                    default=Value(0),
+                    output_field=PositiveIntegerField(),
+                ),
+            )
+            .order_by(
+                "-effective_is_live",
+                "-effective_viewer_count",
+                "platform_account__handle",
+            )
         )
+

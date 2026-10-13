@@ -240,6 +240,49 @@ class TestPersonAPI:
         assert res.status_code == 400
         assert "featured" in res.json()
 
+    def test_person_filter_by_faction(self, api_client, setup_data):
+        """Filter by valid active faction slug matches current memberships only."""
+        res_current = api_client.get("/api/v1/directory/persons/?faction=cleanbois")
+        assert res_current.status_code == 200
+        data = res_current.json()
+        assert data["count"] == 1
+        assert data["results"][0]["slug"] == "tony-corleone"
+
+        # Former/ended membership in leanbois must NOT match
+        res_ended = api_client.get("/api/v1/directory/persons/?faction=leanbois")
+        assert res_ended.status_code == 200
+        assert res_ended.json()["count"] == 0
+
+    def test_person_filter_by_invalid_faction_returns_400(self, api_client, setup_data):
+        """Filtering by non-existent or inactive faction returns 400."""
+        res = api_client.get("/api/v1/directory/persons/?faction=nonexistent-gang")
+        assert res.status_code == 400
+        assert "faction" in res.json()
+
+    def test_person_filter_combined_search_category_faction(self, api_client, setup_data):
+        """Combined filters narrow down results accurately."""
+        res = api_client.get(
+            "/api/v1/directory/persons/?search=Tony&category=gang-member&faction=cleanbois"
+        )
+        assert res.status_code == 200
+        assert res.json()["count"] == 1
+        assert res.json()["results"][0]["slug"] == "tony-corleone"
+
+    def test_person_page_size_parameter(self, api_client):
+        """Custom ?page_size parameter overrides default pagination size up to max."""
+        Person.objects.all().delete()
+        for i in range(25):
+            Person.objects.create(
+                display_name=f"Player {i:02d}",
+                status=PersonStatus.PUBLISHED,
+            )
+
+        res = api_client.get("/api/v1/directory/persons/?page_size=10")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["count"] == 25
+        assert len(data["results"]) == 10
+
     def test_person_unrecognized_query_param_returns_400(self, api_client, setup_data):
         """Unrecognized query parameters return 400 Bad Request."""
         res = api_client.get("/api/v1/directory/persons/?bad_param=123")
@@ -562,6 +605,18 @@ class TestFactionAPI:
         assert d2["count"] == 25
         assert len(d2["results"]) == 5
         assert d2["next"] is None
+
+    def test_faction_page_size_parameter(self, api_client):
+        """Custom ?page_size parameter overrides default pagination size up to max."""
+        Faction.objects.all().delete()
+        for i in range(25):
+            Faction.objects.create(name=f"Faction {i:02d}", status=FactionStatus.ACTIVE)
+
+        res = api_client.get("/api/v1/directory/factions/?page_size=10")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["count"] == 25
+        assert len(data["results"]) == 10
 
     def test_faction_list_query_count_constant(self, api_client, django_assert_num_queries):
         """Verify constant query count (1 count query + 1 data query with annotation = 2)."""

@@ -6,6 +6,7 @@ import MainLayout from "./components/layout/MainLayout";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CreatorDirectoryPage = lazy(() => import("./pages/CreatorDirectoryPage"));
 const GangDirectoryPage = lazy(() => import("./pages/GangDirectoryPage"));
+const GangDetailPage = lazy(() => import("./pages/GangDetailPage"));
 const PersonProfilePage = lazy(() => import("./pages/PersonProfilePage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
@@ -17,6 +18,7 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="creators" element={<CreatorDirectoryPage />} />
           <Route path="gangs" element={<GangDirectoryPage />} />
+          <Route path="gangs/:slug" element={<GangDetailPage />} />
           <Route path="person/:slug" element={<PersonProfilePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

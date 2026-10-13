@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.db.models import Count
 
-from apps.platforms.models import Platform, PlatformAccount
+from apps.platforms.models import Platform, PlatformAccount, PlatformLiveStatus
 
 
 @admin.register(Platform)
@@ -97,3 +97,30 @@ class PlatformAccountAdmin(admin.ModelAdmin):
             },
         ),
     ]
+
+
+@admin.register(PlatformLiveStatus)
+class PlatformLiveStatusAdmin(admin.ModelAdmin):
+    """Admin configuration for PlatformLiveStatus model."""
+
+    list_display = [
+        "platform_account",
+        "is_live",
+        "viewer_count",
+        "stream_title",
+        "last_checked_at",
+    ]
+    list_filter = ["is_live", "platform_account__platform"]
+    search_fields = [
+        "stream_title",
+        "platform_account__handle",
+        "platform_account__person__display_name",
+    ]
+    autocomplete_fields = ["platform_account"]
+    list_select_related = [
+        "platform_account",
+        "platform_account__person",
+        "platform_account__platform",
+    ]
+    readonly_fields = ["created_at", "updated_at"]
+
